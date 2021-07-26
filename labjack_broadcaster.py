@@ -28,15 +28,15 @@ class UploadError(TypeError):
 class LabJack:
 
     """ Initializes all critical processes for LabJack network connection and data transfer. """
-    def __init__(self, connection="ETHERNET", serial_number="470025307", names=["AIN1"]):
+    def __init__(self, connection="ETHERNET", serial_number="470025307"):
 
         self._connection = connection
         self._serial_number = serial_number
-        self._names = names
+        self._names = ["AIN0"]
 
         print("Trying to find LabJack...")
 
-        # Labjack Connection - DATA IN
+        # LabJack Connection - DATA IN
         # Open the LabJack serial number 470025307 on IP connection.
         try:
             self._handle = ljm.openS("T7", connection, serial_number)  # T7 device, IP connection, SN
@@ -44,7 +44,7 @@ class LabJack:
 
         except ljm.LJMError:
             print("""
-            LabJack not found. Make sure connection method is correct (Ethenet or USB) and network is correct.
+            LabJack not found. Make sure connection method is correct (Ethernet or USB) and network is correct.
             Connection method can be set when initializing LabJack object - ex. LJ = LabJack(connection="USB")
             Default connection is Ethernet.
             """)
@@ -71,6 +71,11 @@ class LabJack:
 
     def set_ports(self, ports):
         """ Sets which ports will be used for data output (default is AIN0). """
+
+        # Clear current list of ports
+        self._names.clear()
+
+        # Add new ports to list of ports
         for port in ports:
             self._names.append(port)
 
@@ -175,7 +180,6 @@ class LabJack:
         return 0
 
 
-Jack = LabJack()
-Jack.set_frequency_hz(5)
-Jack.set_frequency_ms(200)
-Jack.start_broadcast()
+if __name__ == '__main__':
+    Jack = LabJack()
+    Jack.start_broadcast()
