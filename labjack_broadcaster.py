@@ -1,5 +1,5 @@
 """
-LabJack UDP Broadcast Script - Object-Oriented V0.3
+LabJack UDP Broadcast Script - Object-Oriented V0.3.1
 
 Code by Jack Stevenson and Chris Romsos, referencing code from LabJack Corporation
 
@@ -39,11 +39,11 @@ class Sensor:
         return self._port
 
     def set_pin(self, pin):
-        """ Sets socket number (default is 30325). """
+        """ Sets pin number (default is AIN0). """
         self._pin = pin
 
     def get_pin(self):
-        """ Returns socket number (default is 30325). """
+        """ Returns pin number (default is AIN0). """
         return self._pin
 
     def set_frequency_ms(self, frequency):
@@ -63,12 +63,13 @@ class Sensor:
         return self._name
 
     def set_number(self, number):
-        """ Set number for interval tracking. """
+        """ Set number for interval tracking - not meant to be set manually """
         self._number = number
 
     def get_number(self):
-        """ Get number for use in interval. """
+        """ Get number for use in interval - not meant to be set manually """
         return self._number
+
 
 # LabJack class with custom methods
 class LabJack:
@@ -78,9 +79,9 @@ class LabJack:
 
         self._connection = connection
         self._serial_number = serial_number
-        #self._pins = ["AIN0"]
         self._sensors = []
-        self._num_sensors = 0
+        self._num_sensors = 0  # Number of sensors connected to the LabJack
+        self._interval_number = 0  # Auto-assigned ID for a sensor that associates it with an interval for threading
 
         print("Trying to find LabJack...")
 
@@ -109,11 +110,13 @@ class LabJack:
         self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
 
+    # need to clean up this method, it has some potential weak spots
     def add(self, sensor):
         """ Adds a sensor to LabJack object. """
+        sensor.set_number(self._interval_number)
         self._sensors.append(sensor)
         self._num_sensors += 1
-        sensor.set_number(self._num_sensors)
+        self._interval_number += 1
 
     # Potentially problematic implementation - check functionality
     def remove(self, name):
@@ -139,7 +142,6 @@ class LabJack:
         rateus = sensor.get_rate() * 1000
         ljm.startInterval(sensor.get_number(), rateus)
 
-        #numSkippedIntervals = 0
         last_tick = ljm.getHostTick()
 
         while True:
@@ -179,9 +181,9 @@ class LabJack:
         print("\nFinished!")
 
         # Get the final time
-        appEndTime = datetime.datetime.now()
-        endTimeStr = appEndTime.isoformat(timespec='milliseconds')
-        print("The final time is: %s" % endTimeStr)
+        app_end_time = datetime.datetime.now()
+        end_time_str = app_end_time.isoformat(timespec='milliseconds')
+        print("The final time is: %s" % end_time_str)
 
         # Close fi
         # Close handles
@@ -219,9 +221,9 @@ class LabJack:
         raise KeyboardInterrupt
 
         # Get the final time
-        appEndTime = datetime.datetime.now()
-        endTimeStr = appEndTime.isoformat(timespec='milliseconds')
-        print("The final time is: %s" % endTimeStr)
+        app_end_time = datetime.datetime.now()
+        end_time_str = app_end_time.isoformat(timespec='milliseconds')
+        print("The final time is: %s" % end_time_str)
 
         # Close fi
         # Close handles
@@ -237,7 +239,5 @@ if __name__ == '__main__':
     MainSensor = Sensor("AIN1", name="MainSensor", rate=1000)
     Jack.add(WaterSensor)
     Jack.add(MainSensor)
-
-    print(Jack._sensors)
 
     Jack.start_broadcast()
