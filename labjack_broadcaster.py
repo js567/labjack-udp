@@ -23,7 +23,7 @@ import socket
 from threading import Thread
 
 
-# Sensor class which is added to LabJack object to gather data over UDP
+# Sensor class - used by LabJack object to gather data over UDP
 class Sensor:
     def __init__(self, pin="AIN0", port="30325", rate=1000, name="sensor", number=0):
         self._pin = pin
