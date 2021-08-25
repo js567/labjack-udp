@@ -1,5 +1,6 @@
 """
-LabJack UDP Broadcast Script - Object-Oriented V0.3.1
+LabJack UDP Broadcast Script
+Object-Oriented V1.3 - Added threading support for multiple sensor output
 
 Code by Jack Stevenson and Chris Romsos, referencing code from LabJack Corporation
 
@@ -7,15 +8,17 @@ Creates LabJack class to instantiate a LabJack object for broadcasting. This scr
 as a module. The class has a number of methods that can be called in this script or in a separate one if imported as
 a module.
 
+THINGS YOU MUST CHANGE FOR YOUR APPLICATION: serial number (from your device), device type (T4/T7, potentially others),
+connection type (ETHERNET/USB), sensor pin (AIN0, AIN1, etc...)
+
 For more information or to view the latest version of this script, visit https://github.com/cromsos/CORIOLIX_labjack
 """
-# Update ideas: new socket number for each input
 
 from labjack import ljm
 import datetime
-# import os
-# import sys
-# import time
+import os
+import sys
+import time
 import socket
 from threading import Thread
 
@@ -30,6 +33,7 @@ class Sensor:
         self._intervalHandle = 0
         self._number = number
 
+    # Get and set methods for clean updating, shouldn't need these often if default arguments are changed
     def set_port(self, port):
         """ Sets port name (default is 30325). """
         self._port = port
@@ -71,7 +75,7 @@ class Sensor:
         return self._number
 
 
-# LabJack class with custom methods
+# LabJack class to support all main functions
 class LabJack:
 
     """ Initializes all critical processes for LabJack network connection and data transfer. """
@@ -86,14 +90,15 @@ class LabJack:
         print("Trying to find LabJack...")
 
         # LabJack Connection - DATA IN
-        # Open the LabJack serial number 470025307 on IP connection.
+        # Open the LabJack with specified serial number (remember to replace with yours) on IP connection
         try:
-            self._handle = ljm.openS("T7", connection, serial_number)  # T7 device, IP connection, SN
+            self._handle = ljm.openS("T7", connection, serial_number)  # T7 device (or change to T4), IP connection, SN
             print("LabJack found and connected over: " + connection)
 
+        # LJMError encompasses most connection issues
         except ljm.LJMError:
             print("""
-            LabJack not found. Make sure connection method is correct (Ethernet or USB) and network is correct.
+            LabJack not found. Make sure connection method is correct (ETHERNET or USB) and network is correct.
             Connection method can be set when initializing LabJack object - ex. LJ = LabJack(connection="USB")
             Default connection is Ethernet.
             """)
@@ -105,12 +110,11 @@ class LabJack:
               "Serial number: %i, IP address: %s, Port: %i,\nMax bytes per MB: %i" %
               (info[0], info[1], info[2], ljm.numberToIP(info[3]), info[4], info[5]))
 
-        # UDP Socket - DATA OUT
+        # Create a UDP Socket - DATA OUT
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # UDP
         self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
 
-    # need to clean up this method, it has some potential weak spots
     def add(self, sensor):
         """ Adds a sensor to LabJack object. """
         sensor.set_number(self._interval_number)
@@ -118,7 +122,7 @@ class LabJack:
         self._num_sensors += 1
         self._interval_number += 1
 
-    # Potentially problematic implementation - check functionality
+    # Avoid having to use the remove method, cleaning up add method usages is preferable
     def remove(self, name):
         """ Removes a sensor from LabJack object. """
         if self._sensors == []:
@@ -148,17 +152,22 @@ class LabJack:
 
             try:
 
+                # This section deals with collecting data at the proper time
                 ljm.waitForNextInterval(sensor.get_number())
                 cur_tick = ljm.getHostTick()
+                # Duration can be used to identify discrepancies between desired sampling rate and actual rate
                 duration = (cur_tick - last_tick) / 1000
                 cur_time = datetime.datetime.now()
                 cur_time_str = cur_time.isoformat(timespec='milliseconds')
 
+                # Variable for the voltage collected from the sensor
                 result = ljm.eReadName(self._handle, sensor.get_pin())
 
+                # Formats message as a string, maybe try JSON here instead if it suits your application
                 message = f"{cur_time_str}, {sensor.get_name()}, {sensor.get_rate()}, {duration}, {result}"
                 print(message)
 
+                # Sends UDP message over network
                 print("Sending UDP")
                 self._sock.sendto(bytes(message, "utf-8"), ("255.255.255.255", int(sensor.get_port())))
                 print("Sending Done")
@@ -196,11 +205,11 @@ class LabJack:
         # Get the current time to build a time-stamp.
         app_start_time = datetime.datetime.now()
         start_time_str = app_start_time.isoformat(timespec='milliseconds')
-        # time_str = app_start_time.isoformat(timespec='milliseconds')
 
         # Print some program-initialization information
         print("The time is: %s" % start_time_str)
 
+        # New section, spins off threads for each sensor so they can have separate data collection frequencies
         threads = []
         for sensor in self._sensors:
 
@@ -233,7 +242,9 @@ class LabJack:
         return 0
 
 
+# Example activation sequence when run as a script
 if __name__ == '__main__':
+
     Jack = LabJack()
     WaterSensor = Sensor("AIN0", name="WaterSensor", rate=500)
     MainSensor = Sensor("AIN1", name="MainSensor", rate=1000)
